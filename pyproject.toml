@@ -1,0 +1,16 @@
+[project]
+name = "mlx-timesfm"
+version = "0.1.0"
+description = "TimesFM 3.0 time-series foundation model in MLX (Apple silicon)"
+readme = "README.md"
+authors = [
+    { name = "BP", email = "11394934+benjipeng@users.noreply.github.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "mlx>=0.32.2",
+]
+
+[build-system]
+requires = ["uv_build>=0.10.9,<0.11.0"]
+build-backend = "uv_build"

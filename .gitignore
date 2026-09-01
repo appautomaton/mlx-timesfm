@@ -1,0 +1,24 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv/
+.venv-torch/
+
+# Reference clone of google-research/timesfm (has its own .git)
+.references/
+
+# Model weights (symlink to external storage)
+models
+
+# Convert/parity outputs
+*.safetensors.npz
+.cache/
+
+# macOS
+.DS_Store
