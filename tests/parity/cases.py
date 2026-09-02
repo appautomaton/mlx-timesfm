@@ -76,6 +76,55 @@ def _layer_weights(rng, d: int, hd: int, hidden: int) -> dict[str, np.ndarray]:
     return w
 
 
+# ---- small-model (Phase 3 forward) shared spec --------------------------
+MODEL_D, MODEL_HIDDEN, MODEL_HEADS, MODEL_LAYERS = 32, 64, 4, 2
+MODEL_PATCH_LEN, MODEL_OUT_LEN, MODEL_QUANTILES = 4, 8, (0.25, 0.5, 0.75)
+
+
+def _model_weights(rng) -> dict[str, np.ndarray]:
+    hd = MODEL_D // MODEL_HEADS
+    rb_in = 2 * (MODEL_PATCH_LEN + MODEL_OUT_LEN)  # 24
+    w = {
+        "pre_transformer_resblock.hidden_layer.weight": _linear(rng, MODEL_D, rb_in),
+        "pre_transformer_resblock.output_layer.weight": _linear(rng, MODEL_D, MODEL_D),
+        "pre_transformer_resblock.residual_layer.weight": _linear(rng, MODEL_D, rb_in),
+        "output_head.weight": _linear(rng, MODEL_OUT_LEN * len(MODEL_QUANTILES), MODEL_D),
+        "output_head.bias": _normal(rng, MODEL_OUT_LEN * len(MODEL_QUANTILES), scale=0.01),
+    }
+    for i in range(MODEL_LAYERS):
+        w |= {
+            f"transformer_stack.layers.{i}.{k}": v
+            for k, v in _layer_weights(rng, MODEL_D, hd, MODEL_HIDDEN).items()
+        }
+    return w
+
+
+def _model_inputs(cpm: bool):
+    """(2, 2, 6, 4) patched inputs: interior noise masks, a leading fully
+    masked patch (exercises cumprod leading-only semantics), one covariate
+    variate; optionally a horizon-style CPM mask."""
+
+    def gen(rng):
+        values = _normal(rng, 2, 2, 6, MODEL_PATCH_LEN)
+        masks = rng.random((2, 2, 6, MODEL_PATCH_LEN)) < 0.1
+        masks[:, :, 0, :] = True  # leading fully-masked patch
+        patch_is_target = np.ones((2, 2, 6), dtype=bool)
+        patch_is_target[:, 1, :] = False  # variate 1 = covariate
+        out = {
+            "values": values,
+            "masks": masks,
+            "patch_is_target": patch_is_target,
+        }
+        if cpm:
+            patch_cpm = np.zeros((2, 6), dtype=bool)
+            patch_cpm[0, 4:] = True
+            patch_cpm[1, 5] = True
+            out["patch_cpm_mask"] = patch_cpm
+        return out
+
+    return gen
+
+
 @dataclass(frozen=True)
 class Case:
     """One parity case: generators + gate (from SPEC A1)."""
@@ -84,6 +133,8 @@ class Case:
     weights: Callable[[np.random.Generator], dict[str, np.ndarray]] | None = None
     tol: float | None = None
     bit_exact: bool = False
+    # Per-output overrides of `tol`: value = max abs diff; None = bit-exact.
+    per_output_tol: dict[str, float | None] = field(default_factory=dict)
     meta: dict[str, Any] = field(default_factory=dict)
 
 
@@ -200,4 +251,23 @@ CASES: dict[str, Case] = {
     ),
     # structural only: torch dumps its 20-layer state-dict key tree as a string
     "stack_keys": Case(inputs=lambda rng: {}, bit_exact=True, meta={"layers": SMALL_LAYERS}),
+    # ---- Phase 3: full forward (small random-weights model) ----
+    "model_forward_small": Case(
+        inputs=_model_inputs(cpm=True),
+        weights=_model_weights,
+        tol=ACTIVATION_TOL,
+        per_output_tol={"revin_mu": NORM_TOL, "revin_sigma": NORM_TOL,
+                        # additive masks: integer logic, must match exactly
+                        "seq_mask_0": None, "seq_mask_1": None},
+        meta={"freeze_after": None},
+    ),
+    "model_forward_freeze": Case(
+        # no CPM path; exercises the freeze_after stat-freeze branch
+        inputs=_model_inputs(cpm=False),
+        weights=_model_weights,
+        tol=ACTIVATION_TOL,
+        per_output_tol={"revin_mu": NORM_TOL, "revin_sigma": NORM_TOL,
+                        "seq_mask_0": None, "seq_mask_1": None},
+        meta={"freeze_after": 2},
+    ),
 }

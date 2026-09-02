@@ -1,6 +1,6 @@
 # Parity report: `relu`
 
-- generated: 2026-09-01 22:59:59
+- generated: 2026-09-01 23:34:44
 - seed: 0
 - devices: torch=cpu, mlx=cpu (SPEC A1)
 - criterion: bit-exact

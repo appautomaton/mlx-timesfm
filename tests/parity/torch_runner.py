@@ -27,9 +27,11 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from timesfm3 import configs, normalization, transformer
+from timesfm3 import configs, model, normalization, transformer
 
+import cases as case_specs
 from cases import (
+    CASES,
     PARITY_EPS,
     REAL_D,
     REAL_HEADS,
@@ -199,6 +201,81 @@ def case_stacked_small(i, w):
     return {"y": out.numpy()}
 
 
+def _model_transformer_config() -> configs.TransformerConfig:
+    return configs.TransformerConfig(
+        model_dims=case_specs.MODEL_D,
+        hidden_dims=case_specs.MODEL_HIDDEN,
+        num_heads=case_specs.MODEL_HEADS,
+        attention_norm="rms",
+        feedforward_norm="rms",
+        qk_norm="rms",
+        use_bias=False,
+        use_rope_seq=True,
+        use_rope_var=False,
+        ff_activation="relu",
+        deterministic=True,
+        use_memory_efficient_attention=True,
+        use_sdpa=False,  # manual branch — mirrors the port (see module docstring)
+    )
+
+
+def _build_small_model(w) -> model.TimesFM3Torch:
+    m = model.TimesFM3Torch(
+        input_patch_len=case_specs.MODEL_PATCH_LEN,
+        output_patch_len=case_specs.MODEL_OUT_LEN,
+        quantiles=list(case_specs.MODEL_QUANTILES),
+        residual_block_config=configs.ResidualBlockConfig(
+            hidden_dims=case_specs.MODEL_D,
+            output_dims=case_specs.MODEL_D,
+            use_bias=False,
+            activation="relu",
+        ),
+        transformer_config=configs.StackedTransformersConfig(
+            num_layers=case_specs.MODEL_LAYERS,
+            transformer=_model_transformer_config(),
+        ),
+    )
+    m.load_state_dict(_sd(w), strict=True)
+    m.eval()
+    _force_eps(m, PARITY_EPS)
+    return m
+
+
+def _model_case(i, w, case_name: str) -> dict:
+    m = _build_small_model(w)
+    freeze_after = CASES[case_name].meta["freeze_after"]
+    cpm = _t(i["patch_cpm_mask"]) if "patch_cpm_mask" in i else None
+    out = m.forward(
+        {
+            "values": _t(i["values"]),
+            "masks": _t(i["masks"]),
+            "patch_is_target": _t(i["patch_is_target"]),
+        },
+        freeze_after=freeze_after,
+        patch_cpm_mask=cpm,
+        return_aux_outputs=True,
+    )
+    res = {
+        "y": out["logits"].numpy(),
+        "revin_mu": out["revin_stats"][0].numpy(),
+        "revin_sigma": out["revin_stats"][1].numpy(),
+        "aux_resblock_input": out["__call__:resblock_input"].numpy(),
+        "aux_transformer_input": out["__call__:transformer_input"].numpy(),
+        "aux_transformer_output": out["__call__:transformer_output"].numpy(),
+    }
+    for j, mask in enumerate(out["__call__:seq_attn_mask"]):
+        res[f"seq_mask_{j}"] = _to_additive(mask)
+    return res
+
+
+def case_model_forward_small(i, w):
+    return _model_case(i, w, "model_forward_small")
+
+
+def case_model_forward_freeze(i, w):
+    return _model_case(i, w, "model_forward_freeze")
+
+
 def case_stack_keys(i, w):
     """Dump the reference's 20-layer real-dim state-dict key tree (structure only)."""
     m = transformer.StackedMixingTransformer(
@@ -227,6 +304,8 @@ CASE_RUNNERS = {
     "mixing_layer": case_mixing_layer,
     "stacked_small": case_stacked_small,
     "stack_keys": case_stack_keys,
+    "model_forward_small": case_model_forward_small,
+    "model_forward_freeze": case_model_forward_freeze,
 }
 
 

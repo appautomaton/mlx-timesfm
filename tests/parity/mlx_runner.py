@@ -155,6 +155,69 @@ def case_stacked_small(i, w):
     return {"y": out}
 
 
+def _build_small_model(w) -> object:
+    from mlx_timesfm.config import (
+        ResidualBlockConfig,
+        StackedTransformersConfig,
+        TimesFM3Config,
+    )
+    from mlx_timesfm.model import TimesFM3
+
+    cfg = TimesFM3Config(
+        input_patch_len=case_specs.MODEL_PATCH_LEN,
+        output_patch_len=case_specs.MODEL_OUT_LEN,
+        quantiles=case_specs.MODEL_QUANTILES,
+        residual_block_config=ResidualBlockConfig(
+            hidden_dims=case_specs.MODEL_D,
+            output_dims=case_specs.MODEL_D,
+            use_bias=False,
+            activation="relu",
+        ),
+        transformer_config=StackedTransformersConfig(
+            num_layers=case_specs.MODEL_LAYERS,
+            transformer=_mlx_transformer_config(
+                case_specs.MODEL_D, case_specs.MODEL_HIDDEN, case_specs.MODEL_HEADS
+            ),
+        ),
+        rmsnorm_eps=PARITY_EPS,
+    )
+    m = TimesFM3(cfg)
+    load_parameters(m, {k: mx.array(v) for k, v in w.items()})
+    return m
+
+
+def _model_case(i, w, case_name: str):
+    m = _build_small_model(w)
+    freeze_after = case_specs.CASES[case_name].meta["freeze_after"]
+    cpm = _a(i, "patch_cpm_mask") if "patch_cpm_mask" in i else None
+    out = m.forward(
+        {"values": _a(i, "values"), "masks": _a(i, "masks"),
+         "patch_is_target": _a(i, "patch_is_target")},
+        freeze_after=freeze_after,
+        patch_cpm_mask=cpm,
+        return_aux_outputs=True,
+    )
+    res = {
+        "y": out["logits"],
+        "revin_mu": out["revin_stats"][0],
+        "revin_sigma": out["revin_stats"][1],
+        "aux_resblock_input": out["__call__:resblock_input"],
+        "aux_transformer_input": out["__call__:transformer_input"],
+        "aux_transformer_output": out["__call__:transformer_output"],
+    }
+    for j, mask in enumerate(out["__call__:seq_attn_mask"]):
+        res[f"seq_mask_{j}"] = mask
+    return res
+
+
+def case_model_forward_small(i, w):
+    return _model_case(i, w, "model_forward_small")
+
+
+def case_model_forward_freeze(i, w):
+    return _model_case(i, w, "model_forward_freeze")
+
+
 def case_stack_keys(i, w):
     m = StackedMixingTransformer(
         20, _mlx_transformer_config(REAL_D, REAL_D, REAL_HEADS), eps=PARITY_EPS
@@ -179,6 +242,8 @@ CASE_RUNNERS = {
     "mixing_layer": case_mixing_layer,
     "stacked_small": case_stacked_small,
     "stack_keys": case_stack_keys,
+    "model_forward_small": case_model_forward_small,
+    "model_forward_freeze": case_model_forward_freeze,
 }
 
 

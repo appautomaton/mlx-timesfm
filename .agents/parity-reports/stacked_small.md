@@ -1,6 +1,6 @@
 # Parity report: `stacked_small`
 
-- generated: 2026-09-01 23:00:01
+- generated: 2026-09-01 23:34:45
 - seed: 0
 - devices: torch=cpu, mlx=cpu (SPEC A1)
 - criterion: max abs diff <= 0.0001

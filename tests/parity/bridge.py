@@ -140,17 +140,27 @@ def write_report(
     metas: list[dict[str, Any]],
     tol: float | None,
     require_bit_exact: bool,
+    per_output_tol: dict[str, float | None] | None = None,
 ) -> Path:
     REPORTS.mkdir(parents=True, exist_ok=True)
-    path = REPORTS / f"{case}.md"
+    suffix = "" if seed == 0 else f"_seed{seed}"
+    path = REPORTS / f"{case}{suffix}.md"
+    per_output_tol = per_output_tol or {}
 
-    def _pass(v: dict[str, Any]) -> bool:
+    def _pass(k: str, v: dict[str, Any]) -> bool:
         if require_bit_exact:
             return bool(v["bit_exact"])
-        return tol is not None and v["max_abs_diff"] is not None and v["max_abs_diff"] <= tol
+        gate = per_output_tol.get(k, tol)  # None entry ⇒ bit-exact for this key
+        if k in per_output_tol and per_output_tol[k] is None:
+            return bool(v["bit_exact"])
+        return gate is not None and v["max_abs_diff"] is not None and v["max_abs_diff"] <= gate
 
-    ok = all(_pass(v) for v in per.values())
+    ok = all(_pass(k, v) for k, v in per.items())
     criterion = "bit-exact" if require_bit_exact else f"max abs diff <= {tol}"
+    if per_output_tol:
+        criterion += " (per-output overrides: " + ", ".join(
+            f"{k}: {'bit-exact' if v is None else v}" for k, v in sorted(per_output_tol.items())
+        ) + ")"
     lines = [
         f"# Parity report: `{case}`",
         "",
@@ -195,5 +205,7 @@ def run_parity_case(case: str, seed: int = 0) -> dict[str, Any]:
     t_meta = run_torch(case, inputs, weights, t_out)["meta"]
     m_meta = run_mlx(case, inputs, weights, m_out)["meta"]
     per = compare(t_out, m_out)
-    report = write_report(case, seed, per, [t_meta, m_meta], spec.tol, spec.bit_exact)
+    report = write_report(
+        case, seed, per, [t_meta, m_meta], spec.tol, spec.bit_exact, spec.per_output_tol
+    )
     return {"per": per, "report": report}

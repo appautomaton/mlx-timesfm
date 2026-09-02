@@ -1,6 +1,6 @@
 # Parity report: `segment_mask`
 
-- generated: 2026-09-01 22:59:58
+- generated: 2026-09-01 23:34:42
 - seed: 0
 - devices: torch=cpu, mlx=cpu (SPEC A1)
 - criterion: bit-exact

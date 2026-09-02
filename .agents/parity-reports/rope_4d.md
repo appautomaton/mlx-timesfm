@@ -1,6 +1,6 @@
 # Parity report: `rope_4d`
 
-- generated: 2026-09-01 22:59:56
+- generated: 2026-09-01 23:34:40
 - seed: 0
 - devices: torch=cpu, mlx=cpu (SPEC A1)
 - criterion: max abs diff <= 0.0001

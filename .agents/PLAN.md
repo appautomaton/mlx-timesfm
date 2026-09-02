@@ -123,16 +123,39 @@ Goal: infrastructure to prove every operator exists before any operator is porte
 
 ## Phase 3 — Model body
 
-- [ ] `util.py`: `revin`, `get_running_stats`/`update_running_stats` (python loop
+- [x] `util.py`: `revin`, `get_running_stats`/`update_running_stats` (python loop
       over patches is fine first; cumsum closed-form later as optimization),
       `get_output_patch_via_roll` + wrap mask, `stitch_patches`
-- [ ] `dense.py`: `ResidualBlock` — **prenorm="none"**, identity_skip=false ⇒
+- [x] `dense.py`: `ResidualBlock` — **prenorm="none"**, identity_skip=false ⇒
       residual_layer present (gotcha: do not add RMSNorm here); constructor takes
-      `input_dim=192` eagerly (no `set_input_dims` lazy rebuild)
-- [ ] `model.py`: `_preprocess` → effective leading-only mask (cumprod dim=2) →
+      `input_dim` eagerly (192 at real dims; no `set_input_dims` lazy rebuild)
+- [x] `model.py`: `_preprocess` → effective leading-only mask (cumprod dim=2) →
       stack → head → `cpm_revin_refine` → inverse RevIN → clip → logits reshape
-- [ ] `cpm_revin_refine.py` port (149 LoC)
-- [ ] Gate **A1** on full `forward()` (random + real weights, aux outputs compared)
+      (reference fidelity: running stats computed BEFORE CPM mask lands in
+      `masks`; `outputs["revin_stats"]` is the PRE-refinement tuple)
+- [x] `cpm_revin_refine.py` port (149 LoC)
+- [x] Gate **A1** on full `forward()` — random weights, ≥2 seeds, aux outputs
+      compared (logits 3–5e-7; revin stats + preprocessing bit-exact; seq
+      masks bit-exact). Two cases: `model_forward_small` (CPM path) and
+      `model_forward_freeze` (freeze_after branch).
+- [ ] **HELD FOR REVIEW (per reviewer): real-weights forward e2e** — run after
+      review, mindful of the A2 debts above (SDPA-off torch side + forced-equal
+      eps), not silently at Phase 5.
+
+### Phase 2 review round 1 — A2 debts (land these when wiring real weights)
+
+- [ ] **A2 must not claim "official default kernel parity"**: the port's A1 is
+      green against torch's *manual* branch, but the official config.json has
+      `use_sdpa: true`. At real-weights time either (a) run torch with SDPA
+      off too (like the parity runner), or (b) measure mlx-manual vs
+      torch-SDPA under A2 tolerances and report it as exactly that comparison.
+- [ ] **RMSNorm eps mismatch against an unmodified reference**: inference uses
+      eps=1e-5, torch 2.13 default is None (machine eps), and the official
+      checkpoint sets no eps. A2 against an untouched `TimesFM3Torch` compares
+      different eps — force the same eps on both sides or treat eps as an
+      explicit A2 confounder with a measured delta.
+- [ ] RoPE long-context positions (>299) untested at A1 by design; first real
+      check happens at A2 (PLAN Phase 1b note).
 
 ## Phase 4 — Decode / forecasting API
 
