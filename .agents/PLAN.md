@@ -44,7 +44,7 @@
       version `0.0.1`.
 - [x] Re-run local tests, lint, tag validation, wheel/sdist inspection, Twine,
       isolated installs, actionlint, and zizmor.
-- [ ] Push the release commit and verify both protected CI jobs.
+- [x] Push the release commit and verify both protected CI jobs.
 - [ ] Create the `v0.0.1` GitHub release and observe Trusted Publishing.
 - [ ] Verify the GitHub release, PyPI project metadata, and clean installation
       from PyPI.
