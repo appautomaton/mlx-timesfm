@@ -12,7 +12,6 @@
 [![License](https://img.shields.io/badge/code-Apache--2.0-4C8BF5?style=flat-square)](LICENSE)
 
 [**PyPI**](https://pypi.org/project/mlx-timesfm/) ·
-[**Project site**](https://appautomaton.renocrypt.com/mlx-timesfm/) ·
 [**Source**](https://github.com/appautomaton/mlx-timesfm)
 
 </div>

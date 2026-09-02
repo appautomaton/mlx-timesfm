@@ -32,7 +32,6 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://appautomaton.renocrypt.com/mlx-timesfm/"
 Repository = "https://github.com/appautomaton/mlx-timesfm"
 Documentation = "https://github.com/appautomaton/mlx-timesfm#readme"
 Issues = "https://github.com/appautomaton/mlx-timesfm/issues"
