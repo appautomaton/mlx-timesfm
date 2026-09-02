@@ -35,7 +35,7 @@
 - [x] Run `uv sync --locked`, lint, tests, and `uv build --no-sources`.
 - [x] Inspect wheel/sdist metadata and contents; install and smoke-test both in
       isolated environments.
-- [ ] Create/configure `appautomaton/mlx-timesfm`, its `pypi` environment, branch
+- [x] Create/configure `appautomaton/mlx-timesfm`, its `pypi` environment, branch
       protections, and release settings; do not publish before a validated tag.
 
 ## Post-release engineering
