@@ -1,25 +1,53 @@
-# Python-generated files
-__pycache__/
-*.py[oc]
-build/
-dist/
-wheels/
-*.egg-info
-
-# Virtual environments
-.venv/
-.venv-torch/
-
-# Reference clone of google-research/timesfm (has its own .git)
-.references/
-
-# Model weights (symlink to external storage)
-models
-
-# Convert/parity outputs
-*.npz
-tests/parity/artifacts/
-.cache/
-
-# macOS
+# Operating system and editors
 .DS_Store
+._*
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+.zed/
+.claude/
+.codex/
+.opencode/
+
+# Python environments and caches
+.venv*/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Build and packaging outputs
+/build/
+/dist/
+/wheels/
+*.egg-info/
+
+# Read-only upstream sources and local checkpoints
+/.references
+/models
+/weights
+/checkpoints
+/model_cache
+*.safetensors
+*.ckpt
+*.pt
+*.pth
+*.onnx
+*.gguf
+*.bin
+
+# Generated data and runtime outputs
+/artifacts/
+/inputs/
+/outputs/
+/runs/
+/logs/
+*.npy
+*.npz
+*.log

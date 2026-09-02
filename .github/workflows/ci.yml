@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test and build (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.12.9"
+          enable-cache: true
+      - name: Install Python
+        run: uv python install 3.13
+      - name: Sync locked environment
+        run: uv sync --locked
+      - name: Validate release metadata
+        run: uv run python scripts/check_release.py
+      - name: Lint
+        run: uv run ruff check .
+      - name: Test
+        run: uv run pytest
+      - name: Build distributions
+        run: uv build --no-sources
+      - name: Inspect distributions
+        run: uv run python scripts/check_dist.py dist/*
+      - name: Smoke-test wheel
+        run: >-
+          uv run --isolated --no-project --with dist/*.whl
+          --with "mlx[cpu]>=0.32.2,<0.33"
+          python scripts/smoke_test_distribution.py
+      - name: Smoke-test source distribution
+        run: >-
+          uv run --isolated --no-project --with dist/*.tar.gz
+          --with "mlx[cpu]>=0.32.2,<0.33"
+          python scripts/smoke_test_distribution.py

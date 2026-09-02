@@ -1,3 +1,18 @@
+# Copyright 2026 Google LLC
+# Modifications Copyright 2026 AppAutomaton
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 """TimesFM 3.0 configuration dataclasses.
 
 Mirrors the semantics of ``timesfm3.configs`` (read-only PyTorch reference) plus
@@ -7,11 +22,9 @@ exactly the shape of ``config.json`` shipped with the checkpoint.
 This is the single source of truth for model construction, tests and
 ``mlx_timesfm.load()``.
 
-RMSNorm epsilon (SPEC R5): ``TimesFM3Config.rmsnorm_eps`` is a *required knob*,
-never a baked-in default. The reference checkpoint's config.json does not carry
-an eps value, and both frameworks' RMSNorm defaults are version-dependent —
-so model construction must receive an explicit value (the parity harness probes
-the reference torch env's actual eps and records it in every report).
+RMSNorm epsilon (SPEC R5): ``TimesFM3Config.rmsnorm_eps`` is a *required knob*.
+The checkpoint config does not carry it, so the established effective fp32
+reference value is explicit and pinned by the golden manifest.
 """
 
 from __future__ import annotations
@@ -30,13 +43,11 @@ __all__ = [
     "load_config",
 ]
 
-# Documented port-level RMSNorm eps for INFERENCE (applied by load_config /
-# mlx_timesfm.load). SPEC R5 forbids *guessing* a framework's RMSNorm default;
-# this is an explicit, stable port choice, written down and test-locked.
-# Parity code never uses it — it passes the reference env's probed effective
-# value instead (torch 2.13 reports `.eps is None`; effective behavior is
-# settled at 1b).
-INFERENCE_RMSNORM_EPS = 1e-5
+# Effective value of torch.nn.RMSNorm(eps=None) for fp32/opmath-fp32 inputs.
+# PyTorch stores ``None`` on the module but applies the computation type's
+# machine epsilon. FP32 is this port's supported baseline, so making the value
+# explicit preserves reference semantics without relying on an MLX default.
+INFERENCE_RMSNORM_EPS = 1.1920928955078125e-7
 
 
 @dataclasses.dataclass(frozen=True)

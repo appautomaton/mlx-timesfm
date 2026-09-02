@@ -1,25 +1,76 @@
 [project]
 name = "mlx-timesfm"
 version = "0.1.0"
-description = "TimesFM 3.0 time-series foundation model in MLX (Apple silicon)"
+description = "Pure MLX inference for Google TimesFM 3.0 on Apple silicon."
 readme = "README.md"
-authors = [
-    { name = "BP", email = "11394934+benjipeng@users.noreply.github.com" }
+license = "Apache-2.0"
+license-files = [
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md",
 ]
-requires-python = ">=3.13"
+authors = [{ name = "AppAutomaton" }]
+requires-python = ">=3.13,<3.14"
+keywords = [
+    "apple-silicon",
+    "forecasting",
+    "mlx",
+    "time-series",
+    "timesfm",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: MacOS X",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Operating System :: MacOS :: MacOS X",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 dependencies = [
-    "mlx>=0.32.2",
+    "mlx>=0.32.2,<0.33",
 ]
 
+[project.urls]
+Homepage = "https://appautomaton.renocrypt.com/mlx-timesfm/"
+Repository = "https://github.com/appautomaton/mlx-timesfm"
+Documentation = "https://github.com/appautomaton/mlx-timesfm#readme"
+Issues = "https://github.com/appautomaton/mlx-timesfm/issues"
+Changelog = "https://github.com/appautomaton/mlx-timesfm/blob/main/CHANGELOG.md"
+
 [build-system]
-requires = ["uv_build>=0.10.9,<0.11.0"]
+requires = ["uv_build>=0.12.9,<0.13"]
 build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
-    "numpy>=2.5.2",
-    "pytest>=9.1.1",
-    "ruff>=0.16.5",
+    "mlx[cpu]>=0.32.2,<0.33; sys_platform == 'linux'",
+    "numpy>=2.5.2,<3",
+    "pytest>=9.1.1,<10",
+    "ruff>=0.16.5,<0.17",
+]
+
+[tool.uv]
+environments = [
+    "python_version == '3.13' and sys_platform == 'darwin' and platform_machine == 'arm64'",
+    "python_version == '3.13' and sys_platform == 'linux' and platform_machine == 'x86_64'",
+]
+
+[tool.uv.build-backend]
+source-include = [
+    "CHANGELOG.md",
+    "scripts/**",
+    "tests/**",
+    "uv.lock",
+]
+source-exclude = [
+    "/.agents/**",
+    "/.github/**",
+    "/.references/**",
+    "/build/**",
+    "/dist/**",
+    "/models/**",
+    ".DS_Store",
 ]
 
 [tool.pytest.ini_options]
@@ -28,11 +79,8 @@ addopts = "-ra"
 
 [tool.ruff]
 line-length = 100
+target-version = "py313"
+exclude = [".references", ".venv", "models"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "SIM"]
-
-[tool.ruff.lint.isort]
-# tests/parity modules are importable siblings (bridge imports `cases` at
-# runtime in both the .venv and .venv-torch interpreters)
-known-first-party = ["cases", "bridge", "mlx_runner", "torch_runner"]

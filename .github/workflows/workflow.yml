@@ -1,0 +1,115 @@
+name: Publish to PyPI
+
+on:
+  release:
+    types: [published]
+
+permissions: {}
+
+concurrency:
+  group: pypi-${{ github.event.release.tag_name }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build distributions
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.release.tag_name }}
+      - name: Install uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.12.9"
+          enable-cache: false
+      - name: Install Python
+        run: uv python install 3.13
+      - name: Validate tag and metadata
+        run: >-
+          uv run --no-project --python 3.13
+          python scripts/check_release.py --tag "${{ github.event.release.tag_name }}"
+      - name: Build wheel and source distribution
+        run: uv build --no-sources
+      - name: Inspect distributions
+        run: >-
+          uv run --no-project --python 3.13
+          python scripts/check_dist.py dist/*
+      - name: Upload distributions
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: python-package-distributions
+          path: dist/
+          if-no-files-found: error
+          retention-days: 1
+
+  verify:
+    name: Verify release
+    needs: build
+    runs-on: macos-15
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.release.tag_name }}
+      - name: Install uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.12.9"
+          enable-cache: true
+      - name: Install Python
+        run: uv python install 3.13
+      - name: Sync locked environment
+        run: uv sync --locked
+      - name: Lint
+        run: uv run ruff check .
+      - name: Test
+        run: uv run pytest
+      - name: Download distributions
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: python-package-distributions
+          path: dist/
+      - name: Inspect downloaded distributions
+        run: uv run python scripts/check_dist.py dist/*
+      - name: Smoke-test wheel
+        run: >-
+          uv run --isolated --no-project --with dist/*.whl
+          --with "mlx[cpu]>=0.32.2,<0.33"
+          python scripts/smoke_test_distribution.py
+      - name: Smoke-test source distribution
+        run: >-
+          uv run --isolated --no-project --with dist/*.tar.gz
+          --with "mlx[cpu]>=0.32.2,<0.33"
+          python scripts/smoke_test_distribution.py
+
+  publish:
+    name: Publish distributions
+    needs: [build, verify]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: pypi
+      url: https://pypi.org/project/mlx-timesfm/
+    permissions:
+      id-token: write
+    steps:
+      - name: Download distributions
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: python-package-distributions
+          path: dist/
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+        with:
+          attestations: true
+          print-hash: true

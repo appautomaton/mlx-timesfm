@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "fixture": {
+    "file": "uci_appliances.csv",
+    "sha256": "c45620dca460db486b8a40afa5be5be953a29222e286f0d0396c42f2d40e92b8",
+    "source_doi": "10.24432/C5VC8G",
+    "source_license": "CC BY 4.0",
+    "context": 512,
+    "horizon": 128,
+    "targets": ["Appliances", "T1", "RH_1"],
+    "past_only_covariates": ["T2", "RH_2"],
+    "past_future_covariates": ["T_out", "Press_mm_hg"]
+  },
+  "reference": {
+    "implementation": "google-research/timesfm timesfm3 PyTorch",
+    "git_commit": "331c6d33cb1ac2611de3056d0ac7164aab6301eb",
+    "torch_version": "2.13.0",
+    "device": "cpu",
+    "dtype": "float32",
+    "attention": "checkpoint default: use_sdpa=true",
+    "rmsnorm_eps_attribute": null,
+    "rmsnorm_effective_eps": 1.1920928955078125e-7,
+    "checkpoint_sha256": "a7592b0a8432baee54483254e5647856911ce69e09d09a9bb65904b2d98f17da",
+    "config_sha256": "ff17bbc07b792c5a904cca265b8468579d736a4fe84981da25eb871b0a125bc6"
+  },
+  "golden": {
+    "file": "uci_appliances_golden.csv",
+    "sha256": "16ef9edbec377a670bc6cbd4f999d58b98617c51910eb2dbb9b5d8c0ba87d691",
+    "shape": [1, 3, 128, 9],
+    "float_serialization": ".9g (round-trips float32)"
+  },
+  "gate": {
+    "rule": "per-target max absolute difference <= 2e-3 * population std of context",
+    "tolerance_factor": 0.002,
+    "quantile_crossing_rule": "no new adjacent-quantile crossing whose reference gap exceeds 4e-3 * context std"
+  }
+}

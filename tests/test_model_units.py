@@ -230,6 +230,36 @@ def test_model_forward_leading_mask_semantics_and_shapes() -> None:
     mx.eval(pm)
 
 
+def test_forecast_returns_only_target_variates_with_covariates(monkeypatch) -> None:
+    model = TimesFM3(_small_cfg())
+
+    def fake_decode(
+        target,
+        horizon=0,
+        past_only_covariates=None,
+        past_future_covariates=None,
+        **_kwargs,
+    ):
+        total_variates = (
+            target.shape[1]
+            + past_only_covariates.shape[1]
+            + past_future_covariates.shape[1]
+        )
+        return mx.zeros((target.shape[0], total_variates, horizon, 3))
+
+    monkeypatch.setattr(model, "decode", fake_decode)
+    target = np.zeros((1, 2, 16), dtype=np.float32)
+    past_only = np.zeros((1, 1, 16), dtype=np.float32)
+    past_future = np.zeros((1, 2, 24), dtype=np.float32)
+    output = model.forecast(
+        target,
+        horizon=8,
+        past_only_covariates=past_only,
+        past_future_covariates=past_future,
+    )
+    assert output.shape == (1, 2, 8, 3)
+
+
 def test_revin_math_against_numpy_reference() -> None:
     x = np.linspace(-3, 3, 40, dtype=np.float32).reshape(2, 2, 2, 5)
     mu = np.array([[[0.5, -0.5], [1.0, 2.0]], [[0.0, 0.0], [3.0, -3.0]]], dtype=np.float32)
