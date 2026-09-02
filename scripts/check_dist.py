@@ -10,7 +10,7 @@ import zipfile
 from pathlib import Path
 
 EXPECTED_NAME = "mlx-timesfm"
-EXPECTED_VERSION = "0.1.0"
+EXPECTED_VERSION = "0.0.1"
 FORBIDDEN_PARTS = {
     ".agents",
     ".git",

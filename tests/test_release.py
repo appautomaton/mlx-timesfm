@@ -17,4 +17,4 @@ def test_release_source_metadata() -> None:
         capture_output=True,
         text=True,
     )
-    assert result.stdout.strip() == "mlx-timesfm 0.1.0 source metadata valid"
+    assert result.stdout.strip() == "mlx-timesfm 0.0.1 source metadata valid"

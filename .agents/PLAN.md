@@ -38,6 +38,17 @@
 - [x] Create/configure `appautomaton/mlx-timesfm`, its `pypi` environment, branch
       protections, and release settings; do not publish before a validated tag.
 
+## First release (`0.0.1`)
+
+- [x] Set the package, lockfile, changelog, artifact checks, and smoke test to
+      version `0.0.1`.
+- [x] Re-run local tests, lint, tag validation, wheel/sdist inspection, Twine,
+      isolated installs, actionlint, and zizmor.
+- [ ] Push the release commit and verify both protected CI jobs.
+- [ ] Create the `v0.0.1` GitHub release and observe Trusted Publishing.
+- [ ] Verify the GitHub release, PyPI project metadata, and clean installation
+      from PyPI.
+
 ## Post-release engineering
 
 - [ ] Benchmark 1000 univariate series (context 512, horizon 128) against the

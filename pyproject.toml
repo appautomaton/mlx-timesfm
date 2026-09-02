@@ -1,6 +1,6 @@
 [project]
 name = "mlx-timesfm"
-version = "0.1.0"
+version = "0.0.1"
 description = "Pure MLX inference for Google TimesFM 3.0 on Apple silicon."
 readme = "README.md"
 license = "Apache-2.0"

@@ -11,7 +11,7 @@ import mlx_timesfm
 
 def main() -> None:
     assert mlx_timesfm.__version__ == version("mlx-timesfm")
-    assert mlx_timesfm.__version__ == "0.1.0"
+    assert mlx_timesfm.__version__ == "0.0.1"
     assert os.environ["MLX_ENABLE_TF32"] == "0"
     assert callable(mlx_timesfm.load)
     assert mlx_timesfm.TimesFM3Config().num_quantiles == 9
