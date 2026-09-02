@@ -45,9 +45,13 @@
 - [x] Re-run local tests, lint, tag validation, wheel/sdist inspection, Twine,
       isolated installs, actionlint, and zizmor.
 - [x] Push the release commit and verify both protected CI jobs.
-- [ ] Create the `v0.0.1` GitHub release and observe Trusted Publishing.
-- [ ] Verify the GitHub release, PyPI project metadata, and clean installation
+- [x] Create the `v0.0.1` GitHub release and observe Trusted Publishing.
+- [x] Verify the GitHub release, PyPI project metadata, and clean installation
       from PyPI.
+
+Release evidence: [GitHub release](https://github.com/appautomaton/mlx-timesfm/releases/tag/v0.0.1),
+[publication workflow](https://github.com/appautomaton/mlx-timesfm/actions/runs/33657081944),
+and [PyPI project](https://pypi.org/project/mlx-timesfm/0.0.1/).
 
 ## Post-release engineering
 
