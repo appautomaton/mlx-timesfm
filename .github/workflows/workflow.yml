@@ -31,9 +31,11 @@ jobs:
       - name: Install Python
         run: uv python install 3.13
       - name: Validate tag and metadata
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: >-
           uv run --no-project --python 3.13
-          python scripts/check_release.py --tag "${{ github.event.release.tag_name }}"
+          python scripts/check_release.py --tag "$RELEASE_TAG"
       - name: Build wheel and source distribution
         run: uv build --no-sources
       - name: Inspect distributions
@@ -65,7 +67,7 @@ jobs:
         uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           version: "0.12.9"
-          enable-cache: true
+          enable-cache: false
       - name: Install Python
         run: uv python install 3.13
       - name: Sync locked environment
