@@ -17,7 +17,8 @@ wheels/
 models
 
 # Convert/parity outputs
-*.safetensors.npz
+*.npz
+tests/parity/artifacts/
 .cache/
 
 # macOS

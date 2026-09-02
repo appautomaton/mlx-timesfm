@@ -12,9 +12,11 @@ PyTorch reference.
 
 ## 2. Background & inputs (already verified)
 
-- Reference implementation: `.references/timesfm/src/timesfm3/` (Apache-2.0),
-  PyTorch, inference-only (~1500 LoC core: model / transformer / dense /
-  normalization / util / cpm_revin_refine + forecaster wrapper).
+- Reference implementation: `.references/timesfm/src/timesfm3/` (source is
+  Apache-2.0; the **pretrained weights carry a separate Google terms license** —
+  see the HF repo), PyTorch, inference-only (core ≈2k LoC: model / transformer /
+  dense / normalization / util / cpm_revin_refine / configs; plus a ~760-LoC
+  forecaster wrapper we may port last or skip).
 - Weights: `models/timesfm_3_0/original/model.safetensors` — 445 tensors,
   330,710,976 params, float32, PyTorch state-dict naming. Verified loadable via
   `mx.load()` (MLX reads safetensors natively). Linear weights are `(out, in)`,
@@ -56,9 +58,11 @@ PyTorch reference.
   Parity tooling may use torch only inside the separate, gitignored `.venv-torch/`.
 - **N2 — Environment**: uv-managed, Python 3.13, `mlx>=0.32.2` (current latest),
   src-layout (`src/mlx_timesfm/`), `uv_build` backend.
-- **N3 — Performance**: fp32 full-model decode must not exceed ~2× PyTorch-MPS
-  wall time on the same machine (goal: beat it via Metal + `mx.compile`); peak
-  memory ≤ weights + O(b·v·n·d) activations, fp32 weights fit in 1.3 GB.
+- **N3 — Performance**: primary target is the absolute A3 throughput target;
+  secondary context: wall time vs the torch-**CPU** reference (we deliberately do
+  not baseline against torch-MPS: SDPA masked-attention support there is patchy
+  and may silently CPU-fallback, making the comparison meaningless); peak memory
+  ≤ weights + O(b·v·n·d) activations, fp32 weights fit in 1.3 GB.
 - **N4 — Quality**: typed, tested (property tests + parity tests), ruff-clean.
 
 ## 5. Acceptance criteria (parity definition)
@@ -67,17 +71,21 @@ Parity harness runs both stacks on identical inputs; torch side lives in
 `.venv-torch/` (torch + editable install of the reference clone), mlx side in `.venv/`;
 a small bridge script exchanges tensors via `.npz` files.
 
-- **A1 (gates each phase)** — random-weight layer/stack alignment
-  (torch CPU float64→float32 vs mlx float32): max abs diff ≤ 1e-4 on activations,
-  ≤ 1e-5 on normalized stats (RoPE, MHA, single MixingTransformer, full forward).
+- **A1 (gates each phase)** — layer/stack/forward alignment: torch-CPU fp32 vs
+  mlx fp32 on **identical weights and inputs** (shipped via the npz bridge;
+  random or real weights — the model is deterministic at inference). Max abs
+  diff ≤ 1e-4 on activations (RoPE, MHA, MixingTransformer, full forward),
+  ≤ 1e-5 on normalized/reduced quantities (RMSNorm outputs, running stats).
 - **A2 (end-to-end, fp32)** — real weights, ≥5 fixture series (trend, seasonality,
   noisy, near-flat, multivariate x3), horizons 32/128/512:
-  per-quantile **max abs diff ≤ 2e-3 of series σ** and median-rank ordering of
-  quantiles preserved. (Numerical ops differ: SDPA kernels, reduction orders —
-  "reasonable range", not bit-exact.)
+  per-quantile **max abs diff ≤ 2e-3 of series σ**, and quantile ordering
+  matches the reference (the port must not introduce new quantile crossings;
+  crossings already present in torch output are allowed). (Numerical ops differ:
+  SDPA kernels, reduction orders — "reasonable range", not bit-exact.)
 - **A3 (perf smoke)** — decode of 1000 univariate series (context 512, h=128)
   completes in < 60 s on GPU; report logged to `.agents/benchmarks/`.
-- **A4** — `uv run pytest` green in a clean clone (torch-free).
+- **A4** — `uv run pytest` green in a clean clone (torch-free); parity tests
+  carry a `parity` marker and skip cleanly when `.venv-torch/` is absent.
 
 ## 6. Out of scope
 

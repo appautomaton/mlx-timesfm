@@ -25,9 +25,9 @@ uv sync                      # deps (.venv)
 uv run pytest                # tests (must pass torch-free)
 uv run ruff check .          # lint
 uv run python -c "import mlx.core as mx; ..."   # scratch experiments
-# parity reference env (one-time):
+# parity reference env (one-time; uv venvs contain no pip — use uv pip):
 #   uv venv .venv-torch --python 3.13
-#   .venv-torch/bin/python -m pip install torch -e .references/timesfm
+#   uv pip install --python .venv-torch/bin/python torch -e .references/timesfm
 ```
 
 ## Layout

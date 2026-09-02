@@ -24,10 +24,17 @@
 
 Goal: infrastructure to prove every operator, then port them.
 
-- [ ] `.venv-torch/`: `uv venv .venv-torch --python 3.13`; install torch +
-      `pip install -e .references/timesfm` (reference stack; isolated, gitignored)
-- [ ] `tests/parity/bridge.py`: run-npz bridge (inputs saved by torch runner,
-      loaded by mlx runner; diffs printed as a table into `.agents/parity-reports/`)
+- [ ] `.venv-torch/`: `uv venv .venv-torch --python 3.13` — NOTE: uv-created venvs
+      have **no pip inside**; install via
+      `uv pip install --python .venv-torch/bin/python torch -e .references/timesfm`
+      (reference stack; isolated, gitignored)
+- [ ] `uv add --dev pytest ruff` (main .venv dev deps — torch is never one of them)
+- [ ] `tests/parity/bridge.py`: fixture generator + runners. A seeded generator
+      writes **both inputs and model weights** to npz so both stacks start from
+      bit-identical tensors; torch runner and mlx runner each emit outputs;
+      comparator diffs into `.agents/parity-reports/*.md`. Heavy npz artifacts go
+      to `tests/parity/artifacts/` (gitignored).
+- [ ] pytest marker `parity` — auto-skip when `.venv-torch/` is absent (A4)
 - [ ] `normalization.py`: `PerDimScale` (init ⇒ scale ≈ 1/√d)
 - [ ] `transformer.py`: `rope()` — half-rotation style, 3D/4D inputs, arbitrary
       `(b,n)` int positions (R3); `make_attn_mask` / `make_segment_mask` →
