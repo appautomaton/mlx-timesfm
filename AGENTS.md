@@ -44,5 +44,5 @@ uv run python -c "import mlx.core as mx; ..."   # scratch experiments
 - parity gate A1 runs **both stacks on CPU** (kernel-neutral); GPU is tested at A2
 - watch-outs (details in SPEC §7): attention `scale=√head_dim`, additive mask
   direction, per-batch RoPE positions, MLX lazy-eval sync points, and
-  `mlx.nn.RMSNorm` eps ≠ torch eps (torch's default is version-dependent!) —
-  always pass eps explicitly and probe the torch env's actual value
+  RMSNorm eps: never trust either framework's default — pass eps explicitly and
+  probe the torch env's actual value (SPEC R5)

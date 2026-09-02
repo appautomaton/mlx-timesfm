@@ -16,10 +16,9 @@
   round-trip test: `sorted(flatten(model.parameters())) == sorted(safetensors keys)`
   and matching shapes/dtypes; `load()` must **raise** on any missing/extra key or
   shape mismatch (R6), never silently partial-load.
-- **RMSNorm: explicit `eps` everywhere (port config knob), matching whatever eps
-  the reference torch env actually uses** — torch's own default changed across
-  versions (1e-5 → machine eps), mlx default is 1e-6 (R5). Harness setup must
-  probe `torch.nn.RMSNorm(80).eps` and print it in every parity report.
+- **RMSNorm: explicit `eps` everywhere (port config knob)** — never rely on
+  framework defaults (R5); match the eps the torch reference env actually uses,
+  probed via `torch.nn.RMSNorm(80).eps` and printed in every parity report.
 - Do NOT port torch's lazy `ResidualBlock.set_input_dims` hack — take
   `input_dim=2*(ip+op)=192` in the constructor.
 
@@ -47,13 +46,13 @@ Goal: infrastructure to prove every operator exists before any operator is porte
       weights** to npz so both stacks start bit-identical; torch runner + mlx
       runner each emit outputs; comparator diffs into
       `.agents/parity-reports/*.md`. npz artifacts → `tests/parity/artifacts/`
-      (gitignored). Both runners **force CPU** (A1).
+      (gitignored). Both runners **force CPU** (A1). Setup probes
+      `torch.nn.RMSNorm(80).eps` + torch/mlx versions into every report header (R5).
 - [ ] A2 fixture generator: 5 deterministic series (SPEC A2 list) →
       `tests/fixtures/*.csv` + `tests/fixtures/generate.py` (committed; not npz)
 - [ ] pytest marker `parity` — auto-skip when `.venv-torch/` is absent (A4)
-- [ ] Harness setup probe: record torch version + `torch.nn.RMSNorm(80).eps` +
-      `torch.finfo(float32).eps` into every parity report header (R5)
-- [ ] Smoke: bridge round-trips one trivial op (e.g. `mx.maximum` vs `F.relu`)
+- [ ] Smoke: bridge round-trips one trivial op — `mx.maximum(x, 0)` vs
+      `torch.nn.functional.relu(x)` (bit-exact expected)
 
 ## Phase 1b — Pointwise operators
 
@@ -100,6 +99,8 @@ Goal: infrastructure to prove every operator exists before any operator is porte
       detrending incl. covariate groups + trend re-add, horizon CPM mask
 - [ ] `mlx_timesfm.load(path)` + `model.forecast(...)` public API (F5)
 - [ ] Gate **A2**: end-to-end fixtures (5 series × h∈{32,128,512}) within tolerance
+      — revisit the near-flat fixture here: when σ is tiny, the 2e-3·σ bound is
+      the hardest to meet; decide per-fixture vs global tolerance at that point
 - [ ] (P2) sklearn-ish `TimesFM3Forecaster` wrapper
 
 ## Phase 5 — End-to-end & precision
