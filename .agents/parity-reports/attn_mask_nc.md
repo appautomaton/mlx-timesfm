@@ -1,6 +1,6 @@
-# Parity report: `relu`
+# Parity report: `attn_mask_nc`
 
-- generated: 2026-09-01 22:59:59
+- generated: 2026-09-01 22:59:57
 - seed: 0
 - devices: torch=cpu, mlx=cpu (SPEC A1)
 - criterion: bit-exact
@@ -21,4 +21,4 @@
 
 | output | shape | bit-exact | max abs diff |
 |---|---|---|---|
-| `y` | (4096,) | True | 0 |
+| `mask` | (4, 1, 1, 9) | True | 0 |

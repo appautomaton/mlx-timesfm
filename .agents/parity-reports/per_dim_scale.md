@@ -1,9 +1,9 @@
-# Parity report: `relu`
+# Parity report: `per_dim_scale`
 
-- generated: 2026-09-01 22:59:59
+- generated: 2026-09-01 22:59:55
 - seed: 0
 - devices: torch=cpu, mlx=cpu (SPEC A1)
-- criterion: bit-exact
+- criterion: max abs diff <= 1e-05
 - **verdict: PASS**
 
 ## Environment probe (SPEC R5)
@@ -21,4 +21,4 @@
 
 | output | shape | bit-exact | max abs diff |
 |---|---|---|---|
-| `y` | (4096,) | True | 0 |
+| `y` | (2, 8, 16, 80) | False | 5.96046e-08 |

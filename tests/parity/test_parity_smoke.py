@@ -12,6 +12,6 @@ pytestmark = pytest.mark.parity
 def test_relu_bit_exact() -> None:
     from bridge import run_parity_case
 
-    result = run_parity_case("relu", seed=0, require_bit_exact=True)
+    result = run_parity_case("relu", seed=0)
     assert result["per"]["y"]["bit_exact"]
     assert result["report"].exists()

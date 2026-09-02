@@ -1,9 +1,9 @@
-# Parity report: `relu`
+# Parity report: `mha_var`
 
 - generated: 2026-09-01 22:59:59
 - seed: 0
 - devices: torch=cpu, mlx=cpu (SPEC A1)
-- criterion: bit-exact
+- criterion: max abs diff <= 0.0001
 - **verdict: PASS**
 
 ## Environment probe (SPEC R5)
@@ -21,4 +21,5 @@
 
 | output | shape | bit-exact | max abs diff |
 |---|---|---|---|
-| `y` | (4096,) | True | 0 |
+| `mask` | (2, 1, 1, 16) | True | 0 |
+| `y` | (2, 16, 1280) | False | 1.90735e-06 |

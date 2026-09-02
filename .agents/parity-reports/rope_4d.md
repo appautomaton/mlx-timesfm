@@ -1,9 +1,9 @@
-# Parity report: `relu`
+# Parity report: `rope_4d`
 
-- generated: 2026-09-01 22:59:59
+- generated: 2026-09-01 22:59:56
 - seed: 0
 - devices: torch=cpu, mlx=cpu (SPEC A1)
-- criterion: bit-exact
+- criterion: max abs diff <= 0.0001
 - **verdict: PASS**
 
 ## Environment probe (SPEC R5)
@@ -21,4 +21,4 @@
 
 | output | shape | bit-exact | max abs diff |
 |---|---|---|---|
-| `y` | (4096,) | True | 0 |
+| `y` | (2, 12, 16, 80) | False | 9.2864e-05 |

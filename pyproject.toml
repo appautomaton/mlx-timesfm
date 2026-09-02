@@ -31,3 +31,8 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.isort]
+# tests/parity modules are importable siblings (bridge imports `cases` at
+# runtime in both the .venv and .venv-torch interpreters)
+known-first-party = ["cases", "bridge", "mlx_runner", "torch_runner"]

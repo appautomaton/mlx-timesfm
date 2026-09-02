@@ -83,29 +83,43 @@ Goal: infrastructure to prove every operator exists before any operator is porte
 
 ## Phase 1b — Pointwise operators
 
-- [ ] `normalization.py`: `PerDimScale` (init ⇒ scale ≈ 1/√d)
-- [ ] `transformer.py`: `rope()` — half-rotation style, 3D/4D inputs, arbitrary
+- [x] `normalization.py`: `PerDimScale` (init ⇒ scale ≈ 1/√d)
+- [x] `transformer.py`: `rope()` — half-rotation style, 3D/4D inputs, arbitrary
       `(b,n)` int positions (R3); `make_attn_mask` / `make_segment_mask` →
       additive −1e9 float masks (R2)
-- [ ] Gate **A1** per operator (CPU vs CPU, random weights) + property tests
+- [x] Gate **A1** per operator (CPU vs CPU, random weights) + property tests
       (NaN-free, mask row-sums, RoPE norm-preservation)
+- [x] RoPE parity positions capped at 0..299: cross-framework `powf` for the
+      timescale differs ~ulp and the phase error amplifies ≈ |pos|·1e-7, so
+      pos~1000 sits at the 1e-4 A1 edge with identical math; the gate tests the
+      per-batch-position mechanism (R3), long-range behaviour is A2's job.
 
 ## Phase 1c — Attention
 
-- [ ] `MultiHeadAttention` — no-bias projections, QK-RMSNorm on head_dim=80
+- [x] `MultiHeadAttention` — no-bias projections, QK-RMSNorm on head_dim=80
       (explicit eps, R5), order: proj → RoPE → QKnorm → PerDimScale →
       sdpa(**scale=√80**, R1); variate-attn = same class, non-causal, no RoPE
-- [ ] Gate **A1** on MHA (seq + var configs), CPU vs CPU
+- [x] Gate **A1** on MHA (seq + var configs), CPU vs CPU
+- [x] Attention kernel decision: **manual path is the port default** —
+      `mx.fast.scaled_dot_product_attention` runs head_dim=80 but deviates
+      ~3.1e-3 from manual attention on CPU (measured, mlx 0.32.2), above the
+      A1 1e-4 gate. Torch parity also runs the reference manual branch
+      (`use_sdpa=False`, `rescale_logits=False`) → identical math, net logit
+      scale √head_dim preserved (Q pre-multiplied, R1). Fast kernel becomes a
+      Phase-6 performance option under A2 tolerances.
 
 ## Phase 2 — Transformer stack
 
-- [ ] `MixingTransformer`: pre_ln → attn → `post_ln(out) + x` (exact residual form),
+- [x] `MixingTransformer`: pre_ln → attn → `post_ln(out) + x` (exact residual form),
       seq → variate → FFN(relu); reshape `(b,v,n,d) ↔ (b*v,n,d)` / `(b*n,v,d)`
-- [ ] `StackedMixingTransformer` ×20
-- [ ] KV-cache path (`DecodeCache`): replace `.item()` sync with `mx.eval` /
-      `at[]` updates (R4) — can defer to Phase 4 if it blocks progress
-- [ ] Gate **A1** at stack level (1 layer + full stack, random weights, real
-      weight shapes); self-consistency full-seq vs cache path
+- [x] `StackedMixingTransformer` ×20 (key/shape tree asserted equal to the
+      reference state dict: `layers.{i}.…`, 228 keys, bit-exact)
+- [ ] **DEFERRED to Phase 4**: KV-cache path (`DecodeCache`): replace `.item()`
+      sync with `mx.eval` / `at[]` updates (R4). Gate A1 at stack level runs
+      the full-sequence path only now; the cache self-consistency check
+      (full-seq vs cache) moves to Phase 4 with `decode()`.
+- [x] Gate **A1** at stack level (1 layer real dims + ×20 small-dim stack,
+      random weights, real weight shapes)
 
 ## Phase 3 — Model body
 

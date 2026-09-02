@@ -1,9 +1,9 @@
-# Parity report: `relu`
+# Parity report: `mixing_layer`
 
-- generated: 2026-09-01 22:59:59
+- generated: 2026-09-01 23:00:00
 - seed: 0
 - devices: torch=cpu, mlx=cpu (SPEC A1)
-- criterion: bit-exact
+- criterion: max abs diff <= 0.0001
 - **verdict: PASS**
 
 ## Environment probe (SPEC R5)
@@ -21,4 +21,5 @@
 
 | output | shape | bit-exact | max abs diff |
 |---|---|---|---|
-| `y` | (4096,) | True | 0 |
+| `mask` | (3, 1, 8, 8) | True | 0 |
+| `y` | (1, 3, 8, 1280) | False | 2.52724e-05 |
