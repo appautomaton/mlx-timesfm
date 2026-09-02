@@ -112,9 +112,13 @@ mlx export format; distributed; HF hub upload. (May enter future specs.)
   an int offset; custom implementation required; gated by A1.
 - **R4 lazy-eval semantics** (`torch.where`-style branching, `.item()` sync points
   in KV-cache) — may surface as perf, not correctness, issues.
-- **R5 RMSNorm eps default mismatch**: torch `nn.RMSNorm` defaults to eps=1e-5,
-  `mlx.nn.RMSNorm` defaults to eps=1e-6. Every RMSNorm in the port must set
-  `eps=1e-5` explicitly; this silently breaks A1's 1e-5 gate otherwise.
+- **R5 RMSNorm eps defaults diverge and torch's own default is version-dependent**
+  (older torch: 1e-5; torch ≥2.13 docs: None ⇒ machine eps of the compute dtype,
+  ≈1.19e-7 for fp32; mlx default: 1e-6). Rule: never rely on defaults — the port
+  takes an explicit `eps` (configurable, single knob), and parity runs must
+  instantiate torch RMSNorm with the **same eps the reference torch env actually
+  uses** (probe `torch.nn.RMSNorm(80).eps` at harness setup and record it in the
+  report). Otherwise A1's ≤1e-5 norm gate silently measures eps, not code.
 - **R6 weight-key round-trip**: module attribute tree must produce exactly the
   445 safetensors keys (names, shapes). Loading must fail loudly on any
   missing/extra key or shape mismatch rather than silently skipping tensors.

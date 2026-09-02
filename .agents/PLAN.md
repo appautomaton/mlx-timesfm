@@ -16,7 +16,10 @@
   round-trip test: `sorted(flatten(model.parameters())) == sorted(safetensors keys)`
   and matching shapes/dtypes; `load()` must **raise** on any missing/extra key or
   shape mismatch (R6), never silently partial-load.
-- **RMSNorm: always `eps=1e-5`** (torch default; mlx default is 1e-6 — R5).
+- **RMSNorm: explicit `eps` everywhere (port config knob), matching whatever eps
+  the reference torch env actually uses** — torch's own default changed across
+  versions (1e-5 → machine eps), mlx default is 1e-6 (R5). Harness setup must
+  probe `torch.nn.RMSNorm(80).eps` and print it in every parity report.
 - Do NOT port torch's lazy `ResidualBlock.set_input_dims` hack — take
   `input_dim=2*(ip+op)=192` in the constructor.
 
@@ -48,6 +51,8 @@ Goal: infrastructure to prove every operator exists before any operator is porte
 - [ ] A2 fixture generator: 5 deterministic series (SPEC A2 list) →
       `tests/fixtures/*.csv` + `tests/fixtures/generate.py` (committed; not npz)
 - [ ] pytest marker `parity` — auto-skip when `.venv-torch/` is absent (A4)
+- [ ] Harness setup probe: record torch version + `torch.nn.RMSNorm(80).eps` +
+      `torch.finfo(float32).eps` into every parity report header (R5)
 - [ ] Smoke: bridge round-trips one trivial op (e.g. `mx.maximum` vs `F.relu`)
 
 ## Phase 1b — Pointwise operators
@@ -62,7 +67,7 @@ Goal: infrastructure to prove every operator exists before any operator is porte
 ## Phase 1c — Attention
 
 - [ ] `MultiHeadAttention` — no-bias projections, QK-RMSNorm on head_dim=80
-      (**eps=1e-5**, R5), order: proj → RoPE → QKnorm → PerDimScale →
+      (explicit eps, R5), order: proj → RoPE → QKnorm → PerDimScale →
       sdpa(**scale=√80**, R1); variate-attn = same class, non-causal, no RoPE
 - [ ] Gate **A1** on MHA (seq + var configs), CPU vs CPU
 
