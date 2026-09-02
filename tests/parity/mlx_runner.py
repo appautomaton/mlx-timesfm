@@ -218,6 +218,38 @@ def case_model_forward_freeze(i, w):
     return _model_case(i, w, "model_forward_freeze")
 
 
+def case_model_forward_real(i, w):
+    """Real checkpoint weights — read straight from the safetensors file
+    (same file the torch runner reads; the checkpoint is the shared seed)."""
+    from pathlib import Path as _P
+
+    from mlx_timesfm.config import load_config
+    from mlx_timesfm.model import TimesFM3
+
+    ckpt = _P(__file__).resolve().parents[2] / "models" / "timesfm_3_0" / "original"
+    cfg = load_config(ckpt, rmsnorm_eps=PARITY_EPS)
+    m = TimesFM3(cfg)
+    load_parameters(m, mx.load(str(ckpt / "model.safetensors")))
+    out = m.forward(
+        {"values": _a(i, "values"), "masks": _a(i, "masks"),
+         "patch_is_target": _a(i, "patch_is_target")},
+        freeze_after=None,
+        patch_cpm_mask=_a(i, "patch_cpm_mask"),
+        return_aux_outputs=True,
+    )
+    res = {
+        "y": out["logits"],
+        "revin_mu": out["revin_stats"][0],
+        "revin_sigma": out["revin_stats"][1],
+        "aux_resblock_input": out["__call__:resblock_input"],
+        "aux_transformer_input": out["__call__:transformer_input"],
+        "aux_transformer_output": out["__call__:transformer_output"],
+    }
+    for j, mask in enumerate(out["__call__:seq_attn_mask"]):
+        res[f"seq_mask_{j}"] = mask
+    return res
+
+
 def case_stack_keys(i, w):
     m = StackedMixingTransformer(
         20, _mlx_transformer_config(REAL_D, REAL_D, REAL_HEADS), eps=PARITY_EPS
@@ -244,6 +276,7 @@ CASE_RUNNERS = {
     "stack_keys": case_stack_keys,
     "model_forward_small": case_model_forward_small,
     "model_forward_freeze": case_model_forward_freeze,
+    "model_forward_real": case_model_forward_real,
 }
 
 

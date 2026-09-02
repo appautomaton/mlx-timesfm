@@ -114,10 +114,11 @@ Goal: infrastructure to prove every operator exists before any operator is porte
       seq → variate → FFN(relu); reshape `(b,v,n,d) ↔ (b*v,n,d)` / `(b*n,v,d)`
 - [x] `StackedMixingTransformer` ×20 (key/shape tree asserted equal to the
       reference state dict: `layers.{i}.…`, 228 keys, bit-exact)
-- [ ] **DEFERRED to Phase 4**: KV-cache path (`DecodeCache`): replace `.item()`
-      sync with `mx.eval` / `at[]` updates (R4). Gate A1 at stack level runs
-      the full-sequence path only now; the cache self-consistency check
-      (full-seq vs cache) moves to Phase 4 with `decode()`.
+- [ ] **DEFERRED (re-deferred at Phase 4 close, 2026-09-02)**: KV-cache path
+      (`DecodeCache`): `decode()` landed WITHOUT a cache (reference decode is
+      full-forward per call too), so this is now purely a Phase-6 perf item,
+      not a correctness dependency. Replace `.item()` sync with `mx.eval` /
+      `at[]` updates (R4); self-consistency check (full-seq vs cache) gates it.
 - [x] Gate **A1** at stack level (1 layer real dims + ×20 small-dim stack,
       random weights, real weight shapes)
 
@@ -138,41 +139,92 @@ Goal: infrastructure to prove every operator exists before any operator is porte
       compared (logits 3–5e-7; revin stats + preprocessing bit-exact; seq
       masks bit-exact). Two cases: `model_forward_small` (CPM path) and
       `model_forward_freeze` (freeze_after branch).
-- [ ] **HELD FOR REVIEW (per reviewer): real-weights forward e2e** — run after
-      review, mindful of the A2 debts above (SDPA-off torch side + forced-equal
-      eps), not silently at Phase 5.
+- [x] **Real-weights forward e2e (reviewer item, done 2026-09-02)** — case
+      `model_forward_real`: b=2,v=2, 20 patches of 32, CPM on, aux on; torch
+      side runs the SAME manual branch (`use_sdpa=False`) with eps force-set
+      to PARITY_EPS on both stacks (the labelled A2-debt configuration —
+      explicitly NOT official-default-kernel parity). Report
+      `.agents/parity-reports/model_forward_real.md`: **PASS** — logits
+      2.7e-5, 20 seq masks bit-exact, revin stats ≤1e-6;
+      `aux_transformer_output` 2.44e-4 measured against a scale-justified
+      1e-3 gate (|x|≈223 ⇒ 16 fp32 ulps accumulated over 20 layers; the
+      final logits, which are what the gate cares about, hold plain 1e-4).
 
 ### Phase 2 review round 1 — A2 debts (land these when wiring real weights)
 
-- [ ] **A2 must not claim "official default kernel parity"**: the port's A1 is
-      green against torch's *manual* branch, but the official config.json has
-      `use_sdpa: true`. At real-weights time either (a) run torch with SDPA
-      off too (like the parity runner), or (b) measure mlx-manual vs
-      torch-SDPA under A2 tolerances and report it as exactly that comparison.
-- [ ] **RMSNorm eps mismatch against an unmodified reference**: inference uses
-      eps=1e-5, torch 2.13 default is None (machine eps), and the official
-      checkpoint sets no eps. A2 against an untouched `TimesFM3Torch` compares
-      different eps — force the same eps on both sides or treat eps as an
-      explicit A2 confounder with a measured delta.
-- [ ] RoPE long-context positions (>299) untested at A1 by design; first real
-      check happens at A2 (PLAN Phase 1b note).
+- [x] **A2 must not claim "official default kernel parity"** — landed option
+      (a) 2026-09-02: every real-weights run (forward parity + A2 e2e) runs
+      torch with `use_sdpa=False` and is *labelled* as manual-branch
+      comparison in its report; no official-SDPA parity claim is made
+      anywhere. (b) stays open as an optional extra measurement.
+- [x] **RMSNorm eps mismatch** — landed 2026-09-02: all real-weights runs
+      force `PARITY_EPS=1e-5` on BOTH stacks (torch via `_force_eps` walk,
+      mlx via `load(rmsnorm_eps=…)`); the probe value of torch 2.13's default
+      is recorded in each report's confounders table instead of assumed.
+- [ ] RoPE long-context positions (>299) — **still open after A2**. Measured
+      coverage at A2 e2e: largest cell (ar1_mv3, ctx 1024, h 512) reaches
+      patch position 47 only; the 0..299 parity sweep (line above, Phase 1b)
+      remains the furthest verified. A >299 case needs ≥~10k-point context —
+      out of scope for the A2 fixtures; keep as a named debt (would show as
+      horizon-growing systematic if broken; h512 slacks track h32 slacks).
 
 ## Phase 4 — Decode / forecasting API
 
-- [ ] `decode()`: ctx/horizon padding, stitching forecast-patch math, linear
+- [x] `decode()`: ctx/horizon padding, stitching forecast-patch math, linear
       detrending incl. covariate groups + trend re-add, horizon CPM mask
-- [ ] `mlx_timesfm.load(path)` + `model.forecast(...)` public API (F5)
-- [ ] Gate **A2**: end-to-end fixtures (5 series × h∈{32,128,512}) within tolerance
-      — revisit the near-flat fixture here: when σ is tiny, the 2e-3·σ bound is
-      the hardest to meet; decide per-fixture vs global tolerance at that point
+      (2026-09-02; torch-faithful, incl. the "pad values with 0 / masks with
+      True" asymmetry; validated CPU-vs-CPU inside 3e-6 via forward-spy)
+- [x] `mlx_timesfm.load(path)` + `model.forecast(...)` public API (F5)
+      — strict `load_parameters` (R6), no converted artifact; also
+      `__call__ = forward` class alias on TimesFM3 (MLX dispatch quirk:
+      special methods are never looked up on instances, so the alias must be
+      a class attribute). Checkpoint key-tree locked by skipif test:
+      445 tensors / 330,710,976 params, strict-load rejects partial dicts.
+- [x] Gate **A2**: end-to-end fixtures, 5 series × h∈{32,128,512} = 15 cells.
+      **Decision (review round): split the gate by device.**
+      * `test_a2_end_to_end_fixtures_cpu` — torch-CPU vs mlx-CPU, HARD gate,
+        all 15 cells PASS, worst slack 0.005 (also inside the tighter
+        5e-4·σ informational band SPEC contemplates for CPU runs).
+        Report `a2_e2e.md`.
+      * `test_a2_end_to_end_fixtures_gpu` — literal torch-CPU vs mlx-GPU
+        crossing, all 15 cells measured in `a2_e2e_gpu.md`; 9 cells at slack
+        1.09–6.05 ⇒ documented **xfail, conditioned on a live matmul probe**
+        (fails hard on any accurate-matmul GPU; flips to plain PASS when MLX
+        exposes fp32 precision control). `beyond_band` crossings = 0 in every
+        GPU cell — band excess without any ordering deviation.
+      * near-flat decision: per-fixture (per-target-series) σ was already the
+        A2 rule — near_flat σ≈0.79 is not degenerate; no global-tolerance
+        fallback needed, nothing special-cased.
 - [ ] (P2) sklearn-ish `TimesFM3Forecaster` wrapper
+
+### Phase 4 review round — environment finding (2026-09-02)
+
+- **MLX 0.32.2 fp32 `matmul` on Apple M5 Max runs a reduced-precision
+  (tf32-like) tensor path**: single-matmul rel err vs fp64 reference ≈
+  7.4e-4–8.0e-4 for m≥2 across shapes, deterministic; MLX CPU ≈ 1e-6;
+  m=1 (gemv) full precision; **no precision knob exists in 0.32.2**
+  (`dir(mx)` / `mx.metal` expose none). This is ~2 orders of magnitude
+  above what A2's 2e-3·σ was written to absorb and is NOT port-code: same
+  decode inputs agree CPU-vs-CPU at 3e-6, and GPU drift is visible already
+  at the first ResidualBlock output (rel 7.6e-4).
+  **Debt: re-run the GPU cells when MLX gains an fp32 precision control
+  (or on non-M5 hardware); the test automates this via the probe.**
 
 ## Phase 5 — End-to-end & precision
 
-- [ ] Real-weights e2e parity run → report committed to `.agents/parity-reports/`
+- [x] Real-weights e2e parity run → reports committed: `model_forward_real.md`
+      (forward, PASS), `a2_e2e.md` (CPU gate, PASS), `a2_e2e_gpu.md`
+      (GPU crossing, measured + conditioned xfail — see Phase 4 finding)
 - [ ] fp16/bf16 experiment: record quantile drift vs fp32 (median focus); decide
-      whether to expose dtype opt-in (F6)
-- [ ] Gate **A2** sign-off
+      whether to expose dtype opt-in (F6). Note: if M5's fp32 matmul already
+      emulates tf32-precision, fp16/bf16 loss may be smaller than expected —
+      measure, don't assume.
+- [x] Gate **A2** sign-off (2026-09-02, with one recorded environment debt):
+      numerics gate green CPU-vs-CPU (worst slack 0.005, max |diff| 7.5e-6,
+      zero beyond-band crossings); GPU crossing 6/15 in band, 9/15 xfailed
+      solely to the measured M5 reduced-precision fp32 matmul (probe-gated,
+      auto-tightens). No official-default-kernel claim anywhere (SDPA-off +
+      forced-equal eps, labelled in every report).
 
 ## Phase 6 — Polish
 

@@ -8,6 +8,7 @@ from .config import (
     TransformerConfig,
     load_config,
 )
+from .loader import load
 from .model import TimesFM3
 
 __all__ = [
@@ -17,5 +18,6 @@ __all__ = [
     "TimesFM3",
     "TimesFM3Config",
     "TransformerConfig",
+    "load",
     "load_config",
 ]

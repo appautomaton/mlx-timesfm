@@ -1,6 +1,6 @@
 # Parity report: `rmsnorm`
 
-- generated: 2026-09-01 23:34:39
+- generated: 2026-09-02 00:26:50
 - seed: 0
 - devices: torch=cpu, mlx=cpu (SPEC A1)
 - criterion: max abs diff <= 1e-05

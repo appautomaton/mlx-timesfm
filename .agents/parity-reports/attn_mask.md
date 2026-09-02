@@ -1,6 +1,6 @@
 # Parity report: `attn_mask`
 
-- generated: 2026-09-01 23:34:41
+- generated: 2026-09-02 00:26:53
 - seed: 0
 - devices: torch=cpu, mlx=cpu (SPEC A1)
 - criterion: bit-exact

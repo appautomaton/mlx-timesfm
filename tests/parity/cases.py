@@ -125,6 +125,41 @@ def _model_inputs(cpm: bool):
     return gen
 
 
+def _real_forward_inputs(rng):
+    """Fixture-flavoured patched inputs at REAL dims for the real-weights
+    forward case: b=2, v=2 (variate 0 target, variate 1 covariate),
+    ctx 512 + horizon 128 = 640 pts = 20 patches of 32.
+
+    Structure mirrors the small-model case: one leading fully-masked patch
+    (cumprod leading-only semantics), sparse interior masks in the context,
+    CPM mask over the 4 horizon patches.
+    """
+    n = 640
+    t = np.arange(n, dtype=np.float64)
+    b0_target = 2.0 + 0.01 * t + rng.normal(0.0, 0.1, n)
+    b0_cov = np.sin(2 * np.pi * t / 24.0)
+    b1_target = np.sin(2 * np.pi * t / 32.0) + rng.normal(0.0, 0.05, n)
+    b1_cov = rng.normal(0.0, 1.0, n)
+    values = np.stack([[b0_target, b0_cov], [b1_target, b1_cov]]).astype(np.float32)
+    values = values.reshape(2, 2, 20, 32)
+
+    masks = np.zeros((2, 2, 20, 32), dtype=bool)
+    masks[:, :, 0, :] = True  # leading fully-masked patch (left padding)
+    masks[:, :, 1:16, :] |= rng.random((2, 2, 15, 32)) < 0.02
+
+    patch_is_target = np.zeros((2, 2, 20), dtype=bool)
+    patch_is_target[:, 0, :] = True
+
+    patch_cpm_mask = np.zeros((2, 20), dtype=bool)
+    patch_cpm_mask[:, 16:] = True
+    return {
+        "values": values,
+        "masks": masks,
+        "patch_is_target": patch_is_target,
+        "patch_cpm_mask": patch_cpm_mask,
+    }
+
+
 @dataclass(frozen=True)
 class Case:
     """One parity case: generators + gate (from SPEC A1)."""
@@ -269,5 +304,26 @@ CASES: dict[str, Case] = {
         per_output_tol={"revin_mu": NORM_TOL, "revin_sigma": NORM_TOL,
                         "seq_mask_0": None, "seq_mask_1": None},
         meta={"freeze_after": 2},
+    ),
+    # ---- real checkpoint weights (20 layers, d=1280, 330.7M params) ----
+    # No generated weights: both runners read
+    # models/timesfm_3_0/original/model.safetensors themselves (avoids a
+    # 1.3 GB npz copy; the file itself is the shared bit-identical seed).
+    # Torch side keeps use_sdpa=False + forced PARITY_EPS (PLAN Phase 2
+    # review note: this run does NOT claim official-default-kernel parity).
+    # aux_transformer_output gate is scale-adjusted, MEASURED (torch 2.13 /
+    # mlx 0.32.2, both CPU): residual stream reaches |x| ≈ 223 (ulp = 1.5e-5);
+    # stack INPUT already differs by 1 ulp (kernel reduction orders), the
+    # output by 2.4e-4 ≈ 16 ulp after 20 layers — pure fp32 accumulation, a
+    # code error would scale with structure, not with |residual|. Final logits
+    # (data scale, post-inverse-RevIN) hold the plain 1e-4 gate at 2.7e-5.
+    "model_forward_real": Case(
+        inputs=_real_forward_inputs,
+        weights=None,
+        tol=ACTIVATION_TOL,
+        per_output_tol={"revin_mu": NORM_TOL, "revin_sigma": NORM_TOL,
+                        "aux_transformer_output": 1e-3,  # ≈ 4.5e-6 relative
+                        **{f"seq_mask_{i}": None for i in range(20)}},
+        meta={"weights": "checkpoint", "layers": 20},
     ),
 }

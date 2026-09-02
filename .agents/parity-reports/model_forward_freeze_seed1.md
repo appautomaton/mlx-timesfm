@@ -1,6 +1,6 @@
 # Parity report: `model_forward_freeze`
 
-- generated: 2026-09-01 23:34:38
+- generated: 2026-09-02 00:26:48
 - seed: 1
 - devices: torch=cpu, mlx=cpu (SPEC A1)
 - criterion: max abs diff <= 0.0001 (per-output overrides: revin_mu: 1e-05, revin_sigma: 1e-05, seq_mask_0: bit-exact, seq_mask_1: bit-exact)

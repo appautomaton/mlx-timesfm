@@ -276,6 +276,59 @@ def case_model_forward_freeze(i, w):
     return _model_case(i, w, "model_forward_freeze")
 
 
+CKPT_DIR = Path(__file__).resolve().parents[2] / "models" / "timesfm_3_0" / "original"
+
+
+def _build_real_model() -> model.TimesFM3Torch:
+    """Reference model at checkpoint config + REAL safetensors weights.
+
+    Deliberate deviations from the untouched official setup (both recorded so
+    the run cannot be misread as 'official default kernel parity', PLAN
+    Phase-2 review note): use_sdpa is forced False (manual branch, mirroring
+    the port) and eps is force-set to PARITY_EPS on both stacks (R5).
+    """
+    from safetensors.torch import load_file
+
+    cfg = json.loads((CKPT_DIR / "config.json").read_text())
+    tcfg = cfg.get("transformer_config", {}).get("transformer")
+    if isinstance(tcfg, dict):
+        tcfg["use_sdpa"] = False
+    m = model.TimesFM3Torch(**cfg)
+    m.load_state_dict(load_file(str(CKPT_DIR / "model.safetensors")), strict=True)
+    m.eval()
+    _force_eps(m, PARITY_EPS)
+    return m
+
+
+def _model_case_real(i) -> dict:
+    m = _build_real_model()
+    out = m.forward(
+        {
+            "values": _t(i["values"]),
+            "masks": _t(i["masks"]),
+            "patch_is_target": _t(i["patch_is_target"]),
+        },
+        freeze_after=None,
+        patch_cpm_mask=_t(i["patch_cpm_mask"]),
+        return_aux_outputs=True,
+    )
+    res = {
+        "y": out["logits"].numpy(),
+        "revin_mu": out["revin_stats"][0].numpy(),
+        "revin_sigma": out["revin_stats"][1].numpy(),
+        "aux_resblock_input": out["__call__:resblock_input"].numpy(),
+        "aux_transformer_input": out["__call__:transformer_input"].numpy(),
+        "aux_transformer_output": out["__call__:transformer_output"].numpy(),
+    }
+    for j, mask in enumerate(out["__call__:seq_attn_mask"]):
+        res[f"seq_mask_{j}"] = _to_additive(mask)
+    return res
+
+
+def case_model_forward_real(i, w):
+    return _model_case_real(i)
+
+
 def case_stack_keys(i, w):
     """Dump the reference's 20-layer real-dim state-dict key tree (structure only)."""
     m = transformer.StackedMixingTransformer(
@@ -306,6 +359,7 @@ CASE_RUNNERS = {
     "stack_keys": case_stack_keys,
     "model_forward_small": case_model_forward_small,
     "model_forward_freeze": case_model_forward_freeze,
+    "model_forward_real": case_model_forward_real,
 }
 
 
