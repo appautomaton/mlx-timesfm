@@ -27,7 +27,7 @@ uv run ruff check .          # lint
 uv run python -c "import mlx.core as mx; ..."   # scratch experiments
 # parity reference env (one-time; uv venvs contain no pip — use uv pip):
 #   uv venv .venv-torch --python 3.13
-#   uv pip install --python .venv-torch/bin/python torch -e .references/timesfm
+#   uv pip install --python .venv-torch/bin/python -e ".references/timesfm[torch]"
 ```
 
 ## Layout
@@ -41,5 +41,7 @@ uv run python -c "import mlx.core as mx; ..."   # scratch experiments
 
 - mlx 0.32.2 + Metal verified working; default device is GPU
 - weights: 445 tensors, 330.7M params, fp32, state-dict keys map 1:1 onto MLX modules
+- parity gate A1 runs **both stacks on CPU** (kernel-neutral); GPU is tested at A2
 - watch-outs (details in SPEC §7): attention `scale=√head_dim`, additive mask
-  direction, per-batch RoPE positions, MLX lazy-eval sync points
+  direction, per-batch RoPE positions, MLX lazy-eval sync points, and
+  `mlx.nn.RMSNorm` eps default (1e-6) ≠ torch default (1e-5) — always pass eps

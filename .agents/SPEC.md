@@ -71,17 +71,27 @@ Parity harness runs both stacks on identical inputs; torch side lives in
 `.venv-torch/` (torch + editable install of the reference clone), mlx side in `.venv/`;
 a small bridge script exchanges tensors via `.npz` files.
 
-- **A1 (gates each phase)** — layer/stack/forward alignment: torch-CPU fp32 vs
-  mlx fp32 on **identical weights and inputs** (shipped via the npz bridge;
-  random or real weights — the model is deterministic at inference). Max abs
-  diff ≤ 1e-4 on activations (RoPE, MHA, MixingTransformer, full forward),
-  ≤ 1e-5 on normalized/reduced quantities (RMSNorm outputs, running stats).
-- **A2 (end-to-end, fp32)** — real weights, ≥5 fixture series (trend, seasonality,
-  noisy, near-flat, multivariate x3), horizons 32/128/512:
-  per-quantile **max abs diff ≤ 2e-3 of series σ**, and quantile ordering
+- **A1 (gates each phase)** — layer/stack/forward alignment: **both stacks on
+  CPU** (torch CPU; mlx via `mx.set_default_device(mx.cpu)`), fp32, on
+  **identical weights and inputs** (npz bridge; random or real weights — the
+  model is deterministic at inference). Same-device on purpose: a diff must
+  implicate code, not different kernels. Max abs diff ≤ 1e-4 on activations
+  (RoPE, MHA, MixingTransformer, full forward), ≤ 1e-5 on normalized/reduced
+  quantities (RMSNorm outputs, running stats). GPU behavior is covered by A2.
+- **A2 (end-to-end, fp32)** — real weights, torch-CPU vs mlx-**GPU** (this gate
+  intentionally crosses devices; tolerance accounts for kernel differences).
+  **Fixtures** (committed as CSV + a seeded generator script under
+  `tests/fixtures/` — never npz, which is gitignored): five deterministic
+  series — (1) linear trend + N(0,0.1) noise, (2) sine, period 24, amp 1,
+  (3) white noise, (4) near-flat (|x|≤1e-3) with one step at t=100,
+  (5) multivariate: 3 correlated AR(1) channels. Context 512 (1024 for the
+  multivariate fixture set), horizons 32/128/512.
+  **σ := population std of that fixture's unmasked context values** (per target
+  series). Criteria: per-quantile max abs diff ≤ 2e-3·σ, and quantile ordering
   matches the reference (the port must not introduce new quantile crossings;
-  crossings already present in torch output are allowed). (Numerical ops differ:
-  SDPA kernels, reduction orders — "reasonable range", not bit-exact.)
+  crossings already present in torch output are allowed).
+  If mlx runs on CPU here, an additional tighter report (≤5e-4·σ) is recorded
+  as informational.
 - **A3 (perf smoke)** — decode of 1000 univariate series (context 512, h=128)
   completes in < 60 s on GPU; report logged to `.agents/benchmarks/`.
 - **A4** — `uv run pytest` green in a clean clone (torch-free); parity tests
@@ -102,3 +112,9 @@ mlx export format; distributed; HF hub upload. (May enter future specs.)
   an int offset; custom implementation required; gated by A1.
 - **R4 lazy-eval semantics** (`torch.where`-style branching, `.item()` sync points
   in KV-cache) — may surface as perf, not correctness, issues.
+- **R5 RMSNorm eps default mismatch**: torch `nn.RMSNorm` defaults to eps=1e-5,
+  `mlx.nn.RMSNorm` defaults to eps=1e-6. Every RMSNorm in the port must set
+  `eps=1e-5` explicitly; this silently breaks A1's 1e-5 gate otherwise.
+- **R6 weight-key round-trip**: module attribute tree must produce exactly the
+  445 safetensors keys (names, shapes). Loading must fail loudly on any
+  missing/extra key or shape mismatch rather than silently skipping tensors.

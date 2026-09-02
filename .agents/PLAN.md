@@ -12,7 +12,13 @@
   `{query,key}_ln.weight (80,)`, `per_dim_scale.per_dim_scale (80,)`,
   6× `*_ln.weight (1280,)`, `ff{0,1} (1280,1280)`
 - `output_head.weight (576,1280)` + **only bias in the model** `(576,)`
-- Module attribute names must mirror these key names exactly.
+- Module attribute names must mirror these key names exactly — enforce with a
+  round-trip test: `sorted(flatten(model.parameters())) == sorted(safetensors keys)`
+  and matching shapes/dtypes; `load()` must **raise** on any missing/extra key or
+  shape mismatch (R6), never silently partial-load.
+- **RMSNorm: always `eps=1e-5`** (torch default; mlx default is 1e-6 — R5).
+- Do NOT port torch's lazy `ResidualBlock.set_input_dims` hack — take
+  `input_dim=2*(ip+op)=192` in the constructor.
 
 ## Phase 0 — Scaffolding ✅ done
 
@@ -20,30 +26,45 @@
 - [x] Dependency red line recorded (N1) — torch only ever in `.venv-torch/`
 - [x] `.gitignore` (.venv*, .references/, models symlink), initial commit
 
-## Phase 1 — Parity harness + core operators
+## Phase 1a — Parity harness + config loader
 
-Goal: infrastructure to prove every operator, then port them.
+Goal: infrastructure to prove every operator exists before any operator is ported.
 
 - [ ] `.venv-torch/`: `uv venv .venv-torch --python 3.13` — NOTE: uv-created venvs
       have **no pip inside**; install via
-      `uv pip install --python .venv-torch/bin/python torch -e .references/timesfm`
-      (reference stack; isolated, gitignored)
+      `uv pip install --python .venv-torch/bin/python -e ".references/timesfm[torch]"`
+      (torch comes via the `[torch]` extra — explicit, not by luck; also pulls
+      huggingface_hub/safetensors/numpy, fine inside this isolated env;
+      `import timesfm3` requires torch and gets it here)
 - [ ] `uv add --dev pytest ruff` (main .venv dev deps — torch is never one of them)
-- [ ] `tests/parity/bridge.py`: fixture generator + runners. A seeded generator
-      writes **both inputs and model weights** to npz so both stacks start from
-      bit-identical tensors; torch runner and mlx runner each emit outputs;
-      comparator diffs into `.agents/parity-reports/*.md`. Heavy npz artifacts go
-      to `tests/parity/artifacts/` (gitignored).
+- [ ] `config.py`: parse `models/timesfm_3_0/original/config.json` → dataclasses
+      mirroring `.references` `configs.py` semantics; single source of truth for
+      model construction, tests, and `mlx_timesfm.load()`
+- [ ] `tests/parity/bridge.py`: a seeded generator writes **inputs AND model
+      weights** to npz so both stacks start bit-identical; torch runner + mlx
+      runner each emit outputs; comparator diffs into
+      `.agents/parity-reports/*.md`. npz artifacts → `tests/parity/artifacts/`
+      (gitignored). Both runners **force CPU** (A1).
+- [ ] A2 fixture generator: 5 deterministic series (SPEC A2 list) →
+      `tests/fixtures/*.csv` + `tests/fixtures/generate.py` (committed; not npz)
 - [ ] pytest marker `parity` — auto-skip when `.venv-torch/` is absent (A4)
+- [ ] Smoke: bridge round-trips one trivial op (e.g. `mx.maximum` vs `F.relu`)
+
+## Phase 1b — Pointwise operators
+
 - [ ] `normalization.py`: `PerDimScale` (init ⇒ scale ≈ 1/√d)
 - [ ] `transformer.py`: `rope()` — half-rotation style, 3D/4D inputs, arbitrary
       `(b,n)` int positions (R3); `make_attn_mask` / `make_segment_mask` →
       additive −1e9 float masks (R2)
-- [ ] `MultiHeadAttention` — no-bias projections, QK-RMSNorm on head_dim=80,
-      order: proj → RoPE → QKnorm → PerDimScale → sdpa(**scale=√80**, R1),
-      variate-attn = same class, non-causal, no RoPE
-- [ ] Gate **A1** at operator level (rope/masks/MHA vs torch, random weights)
-      + property tests (NaN-free, mask row-sums, orthogonality)
+- [ ] Gate **A1** per operator (CPU vs CPU, random weights) + property tests
+      (NaN-free, mask row-sums, RoPE norm-preservation)
+
+## Phase 1c — Attention
+
+- [ ] `MultiHeadAttention` — no-bias projections, QK-RMSNorm on head_dim=80
+      (**eps=1e-5**, R5), order: proj → RoPE → QKnorm → PerDimScale →
+      sdpa(**scale=√80**, R1); variate-attn = same class, non-causal, no RoPE
+- [ ] Gate **A1** on MHA (seq + var configs), CPU vs CPU
 
 ## Phase 2 — Transformer stack
 
@@ -61,7 +82,8 @@ Goal: infrastructure to prove every operator, then port them.
       over patches is fine first; cumsum closed-form later as optimization),
       `get_output_patch_via_roll` + wrap mask, `stitch_patches`
 - [ ] `dense.py`: `ResidualBlock` — **prenorm="none"**, identity_skip=false ⇒
-      residual_layer present (gotcha: do not add RMSNorm here)
+      residual_layer present (gotcha: do not add RMSNorm here); constructor takes
+      `input_dim=192` eagerly (no `set_input_dims` lazy rebuild)
 - [ ] `model.py`: `_preprocess` → effective leading-only mask (cumprod dim=2) →
       stack → head → `cpm_revin_refine` → inverse RevIN → clip → logits reshape
 - [ ] `cpm_revin_refine.py` port (149 LoC)
@@ -84,9 +106,12 @@ Goal: infrastructure to prove every operator, then port them.
 
 ## Phase 6 — Polish
 
-- [ ] `mx.compile` on forward/decode; measure before/after
+- [ ] `mx.compile` on forward/decode; measure before/after; **then re-run the
+      full A1+A2 suite** — compile must not move results; if it does, treat as bug
 - [ ] Benchmark: 1000 series ctx512 h128 → `.agents/benchmarks/` (Gate **A3**)
-- [ ] README (install / usage / parity & perf tables)
+- [ ] README (install / usage / parity & perf tables) incl. **license section**:
+      code Apache-2.0, pretrained weights under separate Google terms license
+- [ ] `LICENSE` file (Apache-2.0) at repo root
 - [ ] Perf candidates: fuse variate-attn permutes; cumsum closed-form running stats
 - [ ] Gate **A4**: clean-clone `uv run pytest` green, torch-free
 
