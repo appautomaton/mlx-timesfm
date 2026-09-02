@@ -32,27 +32,54 @@
 
 Goal: infrastructure to prove every operator exists before any operator is ported.
 
-- [ ] `.venv-torch/`: `uv venv .venv-torch --python 3.13` — NOTE: uv-created venvs
+- [x] `.venv-torch/`: `uv venv .venv-torch --python 3.13` — NOTE: uv-created venvs
       have **no pip inside**; install via
       `uv pip install --python .venv-torch/bin/python -e ".references/timesfm[torch]"`
       (torch comes via the `[torch]` extra — explicit, not by luck; also pulls
       huggingface_hub/safetensors/numpy, fine inside this isolated env;
       `import timesfm3` requires torch and gets it here)
-- [ ] `uv add --dev pytest ruff` (main .venv dev deps — torch is never one of them)
-- [ ] `config.py`: parse `models/timesfm_3_0/original/config.json` → dataclasses
+- [x] `uv add --dev pytest ruff` (+numpy for the npz bridge; main .venv dev deps —
+      torch is never one of them; mlx 0.32 no longer bundles numpy, so the dev
+      group must carry it)
+- [x] `config.py`: parse `models/timesfm_3_0/original/config.json` → dataclasses
       mirroring `.references` `configs.py` semantics; single source of truth for
       model construction, tests, and `mlx_timesfm.load()`
-- [ ] `tests/parity/bridge.py`: a seeded generator writes **inputs AND model
+- [x] `tests/parity/bridge.py`: a seeded generator writes **inputs AND model
       weights** to npz so both stacks start bit-identical; torch runner + mlx
       runner each emit outputs; comparator diffs into
       `.agents/parity-reports/*.md`. npz artifacts → `tests/parity/artifacts/`
       (gitignored). Both runners **force CPU** (A1). Setup probes
       `torch.nn.RMSNorm(80).eps` + torch/mlx versions into every report header (R5).
-- [ ] A2 fixture generator: 5 deterministic series (SPEC A2 list) →
+- [x] A2 fixture generator: 5 deterministic series (SPEC A2 list) →
       `tests/fixtures/*.csv` + `tests/fixtures/generate.py` (committed; not npz)
-- [ ] pytest marker `parity` — auto-skip when `.venv-torch/` is absent (A4)
-- [ ] Smoke: bridge round-trips one trivial op — `mx.maximum(x, 0)` vs
-      `torch.nn.functional.relu(x)` (bit-exact expected)
+- [x] pytest marker `parity` — auto-skip when `.venv-torch/` is absent (A4);
+      match via `get_closest_marker` — the *directory* name `tests/parity/` is
+      also a pytest keyword, so `"parity" in item.keywords` over-matches
+- [x] Smoke: bridge round-trips one trivial op — `mx.maximum(x, 0)` vs
+      `torch.nn.functional.relu(x)` → **bit-exact**, report in parity-reports/
+- [x] R5 probe result (torch 2.13): `torch.nn.RMSNorm(80).eps` → **None**, not a
+      number. Settled at 1b: instantiate torch RMSNorm with an explicit eps and
+      diff against mlx at the same eps; record the effective eps in reports.
+
+### 1a review round 1 (all landed)
+
+- [x] **#1 Two-process bridge is hard law**: torch side runs *only* as a
+      `.venv-torch/bin/python` subprocess; test code must never `import torch`
+      (uv-run pytest has no torch — hardcoding it breaks A4/N1 on day one).
+      Locked by a `sys.modules` guard test.
+- [x] **#2 Clean clone has no `models/`** (gitignored symlink): tests must not
+      default to `load_config("models/…")`. Committed tiny
+      `tests/fixtures/config.json` (synthetic, checkpoint-shaped) is the parse
+      test path; real-checkpoint test stays skipif.
+- [x] **#3 eps policy for the user API**: `rmsnorm_eps` is *not* in
+      checkpoint config.json, so a strict R5 reading would make
+      `mlx_timesfm.load()` demand torch probing. Decision: the **inference
+      boundary** (`load_config`, later `load()`) hard-wires the documented
+      port constant `INFERENCE_RMSNORM_EPS = 1e-5`; **parity overrides** it
+      with the probed reference value; `from_dict` stays faithful (None=unset).
+- [x] **#4 `to_dict()` is checkpoint-shaped**: port-only knobs are stripped on
+      export so it round-trips against the official config.json byte-for-key
+      (`test_to_dict_is_checkpoint_shaped` locks it).
 
 ## Phase 1b — Pointwise operators
 
